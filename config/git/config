@@ -1,0 +1,29 @@
+[include]
+	path = ~/.config/gitrc
+[color]
+	ui = true
+[core]
+	editor = vim
+	autocrlf = input
+	pager = delta
+[init]
+	defaultBranch = master
+[merge]
+	tool = vimdiff
+	conflictstyle = diff3
+[mergetool]
+	prompt = false
+[interactive]
+	diffFilter = delta
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
+[diff]
+	colorMoved = default
+[diff "crypt"]
+	textconv = cat
+[filter "crypt"]
+	clean = crypt encrypt
+	smudge = crypt decrypt
+	required

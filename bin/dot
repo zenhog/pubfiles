@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+BIN=https://raw.githubusercontent.com/zenhog/pubfiles/master/bin/dot
+
+GIT=https://github.com/zenhog
+
+shopt -s nullglob
+shopt -s extglob
+
+function install() {
+  function rename() {
+    local rand
+    rand=$(tr -dc '[:alnum:]' < /dev/urandom | dd bs=1 count=5 2>/dev/null)
+    mv -v -- "$1" "$1.old.$rand"
+  }
+
+  function symlink() {
+    local target link
+    for t in "$@"; do
+      unset target link
+
+      target="$PWD/$t"
+      link="$HOME/.$t"
+
+      [[ -e "$link" && ! -L "$link" ]] && rename "$link"
+
+      ln -T -svf -- "$target" "$link"
+    done
+  }
+
+  function saferepo() {
+    local dir="$1"
+    local url="$2"
+    [[ -d "$dir" ]] || git clone "$url" "$dir" || exit 1
+    cd "$dir" || exit 1
+    if ! [[ "$(git remote get-url origin)" == "$url" ]]; then
+      rename "$dir"
+      git clone "$url" "$dir" || exit 1
+    fi
+  }
+
+  function fixmod() {
+    find "$1" -type f -exec chmod 600 "{}" \;
+    find "$1" -type d -exec chmod 700 "{}" \;
+  }
+
+  local dir url
+  dir="$HOME/.${1}files"
+  url="https://github.com/zenhog/${1}files"
+
+  case "$1" in
+    pub)
+      saferepo "$dir" "$url"
+      cd "$dir" || exit 1
+      mkdir -p "$HOME/.config" "$HOME/.local/share"
+      symlink !(config|local) config/* local/share/*
+      ;;
+    dot)
+      pass show tokens/main &>/dev/null || {
+        while [[ -z "$PASSPHRASE" ]]; do
+          echo -n 'PASSPHRASE: '
+          read -r -s PASSPHRASE
+        done
+        export PASSPHRASE
+      }
+      install pub
+      saferepo "$dir" "$url"
+      cd "$dir" || exit 1
+      mkdir -p "$HOME/.config" "$HOME/.local/share"
+      cd "$dir/public" && fixmod "$dir/public/password-store" &&
+        symlink !(config|local) config/* local/share/* || exit 1
+      cd "$dir/private" && fixmod "$dir/private" &&
+        symlink !(config|local|pwstore) config/* local/share/* || exit 1
+      ;;
+    sys)
+      install dot
+      saferepo "$dir" "$url"
+      cd "$dir" || exit 1
+
+      readarray -t PACKAGES < <(sed -rn '/^[^#]/p' "$dir/packages.txt")
+
+      # for some reason, xbps can't figure this out on its own
+      sudo xbps-install -Syu xbps
+      sudo xbps-install -Syu ncurses-base
+      sudo xbps-install -Syu void-repo-nonfree
+      sudo xbps-install -Syu "${PACKAGES[@]}"
+
+      sudo rm /etc/runit/runsvdir/default/*
+
+      sudo rsync -v -archive --no-super --no-g --no-t --no-d --no-o --relative \
+        --backup-dir=/.backups public/./ /
+
+      sudo rsync -v -archive --no-super --no-g --no-t --no-d --no-o --relative \
+        --bacup-dir=/.backups --exclude=etc/sudoers private/./ /
+
+      cat private/etc/sudoers | sudo EDITOR=tee visudo
+      ;;
+    moz)
+      ;;
+    all)
+      install pub && install dot && install moz && install sys
+      ;;
+    *)
+      echo "$0 install [ pub | dot | sys | moz | all ]"
+      exit 1
+      ;;
+  esac
+}
+
+function sync() {
+  local -a blacklist=(
+    "--exclude=supervise"
+    "--exclude=system-connections"
+    "--exclude=credentials.txt"
+    "--exclude=*~"
+    "--exclude=*.new-*"
+  )
+
+  local -A private=(
+    [/etc/security/sudo_authorized_keys]=644
+    [/etc/NetworkManager/system-connections]=600
+    [/etc/openvpn/PIA/credentials.txt]=600
+    [/etc/passwd]=644
+    [/etc/group]=644
+    [/etc/shadow]=400
+    [/etc/gshadow]=400
+    [/etc/subuid]=644
+    [/etc/subgid]=644
+  )
+
+  local -a files=(
+    /usr/local/bin
+    /etc/shells
+    /etc/bluetooth
+    /etc/xbps.d/
+    /etc/acpi/custom.sh
+    /etc/acpi/events/custom
+    /etc/rc.conf
+    /etc/rc.local
+    /etc/svd
+    /root/.fbtermrc
+    /etc/sysctl.conf
+    /etc/rsyslog.conf
+    /etc/modprobe.d
+    /etc/modules-load.d
+    /etc/pam.d/sudo
+    /etc/pam.d/slim
+    /etc/pam.d/login
+    /etc/pam.d/i3lock
+    /etc/X11/xorg.conf
+    /etc/dnscrypt-proxy.toml
+    /etc/forwarding-rules.txt
+    /etc/tor
+    /etc/resolv.conf
+    /etc/resolvconf.conf
+    /etc/openvpn
+    /etc/NetworkManager
+    /etc/slim.conf
+    /usr/share/slim/themes
+    /usr/share/kbd/keymaps/i386/qwerty/us-nocaps.map.gz
+    /etc/cgconfig.conf
+    /etc/zzz.d
+    /etc/udev/rules.d/80-net-name-slot.rules
+    /etc/iproute2/rt_tables
+    /etc/iproute2/rt_tables.d
+    /etc/audit/rules.d
+    /etc/ntpd.conf
+    /etc/rsyslog.conf
+    /etc/default
+    /etc/runit/runsvdir/default/
+    /etc/lxd-config.yaml
+  )
+ 
+  local dir url
+  dir="$HOME/.${1}files"
+  url="https://github.com/zenhog/${1}files"
+
+  case "$1" in
+    pub)
+      ;;
+    dot)
+      ;;
+    sys)
+      sudo rsync -v -RrlDpgo --delete --delete-excluded \
+        "${blacklist[@]}" "${files[@]}" "$dir/public"
+
+      sudo rsync -v -RrlDpgo --delete "${private[@]}" "$dir/private"
+
+      sudo cat /etc/sudoers > "$dir/private/etc/sudoers"
+
+      sudo chown -v -R "$USER:$USER" "$dir"/*
+      ;;
+    moz)
+      ;;
+    all)
+      ;;
+    img)
+      ;;
+    *)
+      echo "$0 sync [ pub | dot | sys | moz | img | all ]"
+      exit 1
+      ;;
+  esac
+}
+
+function remaster() {
+  :
+}
+
+function clean() {
+  :
+}
+
+function mklive() {
+  local dir="$HOME/workspace/repos/void-mklive"
+  local url=https://github.com/void-linux/void-mklive
+
+  [[ -d "$dir" ]] || git clone "$url" "$dir"
+
+  cd "$dir" || return
+
+  local -a packages
+  local -a args=(console=tty0 console=ttyS0,115200n8)
+  local -a services=(sshd dbus NetworkManager)
+  local -a dirs=(-I /etc/NetworkManager -I /etc/security/sudo_authorized_keys)
+
+  readarray -t packages < <(sed -r '/^$/d' $HOME/.sysfiles/packages/base)
+
+  sudo ./mklive.sh -C "${args[*]}" -p "${packages[*]}" -K \
+    -T "Custom Live Image" -S "${services[*]}" -I /root \
+    -o $HOME/custom-live-img.iso
+}
+
+
+function main() {
+  if [[ $# -eq 0 ]]; then
+    readarray -t FUNCS < <(declare -F | awk '{print $3}')
+    for f in "${FUNCS[@]}"; do
+      "$f"
+    done
+    exit 1
+  fi
+  "$@"
+}
+
+which git &>/dev/null || { echo "git not found" && exit 1; }
+main "$@"

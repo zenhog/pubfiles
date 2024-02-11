@@ -1,0 +1,3 @@
+files/config/tmux/thumbs/target/release/*
+!files/config/tmux/thumbs/target/release/thumbs
+!files/config/tmux/thumbs/target/release/tmux-thumbs
