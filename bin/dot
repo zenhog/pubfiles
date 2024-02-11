@@ -15,12 +15,13 @@ function install() {
   }
 
   function symlink() {
-    local target link
+    local target link prefix="$HOME"
+    [[ -n "$PREFIX" ]] && prefix="$PREFIX"
     for t in "$@"; do
       unset target link
 
       target="$PWD/$t"
-      link="$HOME/.$t"
+      link="$prefix/.$t"
 
       [[ -e "$link" && ! -L "$link" ]] && rename "$link"
 
@@ -48,6 +49,17 @@ function install() {
   dir="$HOME/.${1}files"
   url="https://github.com/zenhog/${1}files"
 
+  if [[ "$1" == dot || "$1" == moz || "$1" == sys || "$1" == all ]]; then
+    pass show tokens/main &>/dev/null || {
+      until [[ -n "$PASSPHRASE" && ${#PASSPHRASE} -eq 30 ]]
+      do
+        echo -n 'PASSPHRASE: '
+        read -r -s PASSPHRASE
+      done
+      export PASSPHRASE
+    }
+  fi
+
   case "$1" in
     pub)
       saferepo "$dir" "$url"
@@ -56,13 +68,6 @@ function install() {
       symlink !(config|local) config/* local/share/*
       ;;
     dot)
-      pass show tokens/main &>/dev/null || {
-        while [[ -z "$PASSPHRASE" ]]; do
-          echo -n 'PASSPHRASE: '
-          read -r -s PASSPHRASE
-        done
-        export PASSPHRASE
-      }
       install pub
       saferepo "$dir" "$url"
       cd "$dir" || exit 1
@@ -77,13 +82,15 @@ function install() {
       saferepo "$dir" "$url"
       cd "$dir" || exit 1
 
-      readarray -t PACKAGES < <(sed -rn '/^[^#]/p' "$dir/packages.txt")
+      local -a packages
+      readarray -t packages < \
+        <(sed -rn '/^[^#]+/p' "$dir/public/etc/packages"/* | sort -u)
 
       # for some reason, xbps can't figure this out on its own
       sudo xbps-install -Syu xbps
       sudo xbps-install -Syu ncurses-base
       sudo xbps-install -Syu void-repo-nonfree
-      sudo xbps-install -Syu "${PACKAGES[@]}"
+      sudo xbps-install -Syu "${packages[@]}"
 
       sudo rm /etc/runit/runsvdir/default/*
 
@@ -96,6 +103,12 @@ function install() {
       cat private/etc/sudoers | sudo EDITOR=tee visudo
       ;;
     moz)
+      saferepo "$dir" "$url"
+      PREFIX="$HOME/.mozilla2" symlink \
+        !(firefox) \
+        firefox/!(*.main|*.private) \
+        firefox/*.main/*.{json,txt,ini,js,db,sqlite,mozlz4m} ||
+          exit 1
       ;;
     all)
       install pub && install dot && install moz && install sys
@@ -184,7 +197,7 @@ function sync() {
       sudo rsync -v -RrlDpgo --delete --delete-excluded \
         "${blacklist[@]}" "${files[@]}" "$dir/public"
 
-      sudo rsync -v -RrlDpgo --delete "${private[@]}" "$dir/private"
+      sudo rsync -v -RrlDpgo --delete "${!private[@]}" "$dir/private"
 
       sudo cat /etc/sudoers > "$dir/private/etc/sudoers"
 
@@ -194,21 +207,57 @@ function sync() {
       ;;
     all)
       ;;
-    img)
-      ;;
     *)
-      echo "$0 sync [ pub | dot | sys | moz | img | all ]"
+      echo "$0 sync [ pub | dot | sys | moz | all ]"
       exit 1
       ;;
   esac
 }
 
-function remaster() {
-  :
+function pullpush() {
+  function pull() {
+      #git stash
+      #git pull --rebase
+      git rebase --autostash
+      #git stash pop
+  }
+
+  function push() {
+    git add .
+    git commit -m "$(date) on $(hostname)"
+
+    pull
+
+    git push
+  }
+
+  git fetch
+
+  local -a mods
+
+  readarray -t mods < <(git status --porcelain=v1)
+
+  if [[ ${#mods[@]} -gt 0 ]]; then
+    push
+  else
+    pull
+  fi
 }
 
-function clean() {
-  :
+function remaster() {
+  git checkout --orphan tmp
+  git add . --all
+  git commit -m "$(date)"
+  git branch -D master
+  git branch --move tmp master
+  git push --set-upstream origin master --force
+}
+
+function cleanup() {
+  rm -rf .git/refs/original
+  git reflog expire --expire=now --all
+  git gc --prune=now
+  git gc --aggressive --prune=now
 }
 
 function mklive() {

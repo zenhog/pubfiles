@@ -15,6 +15,15 @@
 	prompt = false
 [interactive]
 	diffFilter = delta
+[alias]
+	hist = log --pretty=format:'%h %ad | %s%d [%an]' --graph --date=short
+	dv = difftool -t vimdiff -y
+	plog = log --all --graph --oneline --decorate
+	se = !git rev-list --all | xargs git grep -F
+	unstage = reset HEAD --
+	cleanup = !dot cleanup
+	remaster = !dot remaster
+	sync = !dot pullpush
 [delta]
 	navigate = true
 	side-by-side = true
