@@ -69,6 +69,7 @@ function install() {
       ;;
     dot)
       install pub
+      export PATH="$HOME/.bin:$PATH"
       saferepo "$dir" "$url"
       cd "$dir" || exit 1
       mkdir -p "$HOME/.config" "$HOME/.local/share"
@@ -78,7 +79,9 @@ function install() {
         symlink !(config|local|pwstore) config/* local/share/* || exit 1
       ;;
     sys)
+      sudo xbps-install -Syu git curl gnupg pass rsync
       install dot
+
       saferepo "$dir" "$url"
       cd "$dir" || exit 1
 
