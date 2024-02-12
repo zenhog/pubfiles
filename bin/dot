@@ -315,5 +315,5 @@ function main() {
   "$@"
 }
 
-which git &>/dev/null || { echo "git not found" && exit 1; }
+#which git &>/dev/null || { echo "git not found" && exit 1; }
 main "$@"
