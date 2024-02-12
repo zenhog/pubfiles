@@ -45,6 +45,12 @@ function install() {
     find "$1" -type d -exec chmod 700 "{}" \;
   }
 
+  function checkbin() {
+    for b in "$@"; do
+      which "$b" &>/dev/null || sudo xbps-install -Syu "$b"
+    done
+  }
+
   local dir url
   dir="$HOME/.${1}files"
   url="https://github.com/zenhog/${1}files"
@@ -59,6 +65,8 @@ function install() {
       export PASSPHRASE
     }
   fi
+
+  checkbin git curl gnupg pass rsync
 
   case "$1" in
     pub)
@@ -79,7 +87,6 @@ function install() {
         symlink !(config|local|pwstore) config/* local/share/* || exit 1
       ;;
     sys)
-      sudo xbps-install -Syu git curl gnupg pass rsync
       install dot
 
       saferepo "$dir" "$url"
