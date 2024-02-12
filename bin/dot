@@ -108,7 +108,7 @@ function install() {
         --backup-dir=/.backups public/./ /
 
       sudo rsync -v -archive --no-super --no-g --no-t --no-d --no-o --relative \
-        --bacup-dir=/.backups --exclude=etc/sudoers private/./ /
+        --backup-dir=/.backups --exclude=etc/sudoers private/./ /
 
       cat private/etc/sudoers | sudo EDITOR=tee visudo
       ;;
@@ -199,9 +199,9 @@ function sync() {
   url="https://github.com/zenhog/${1}files"
 
   case "$1" in
-    pub)
-      ;;
-    dot)
+    pub|dot)
+      cd "$dir" || exit 1
+      pullpush
       ;;
     sys)
       sudo rsync -v -RrlDpgo --delete --delete-excluded \
@@ -212,6 +212,9 @@ function sync() {
       sudo cat /etc/sudoers > "$dir/private/etc/sudoers"
 
       sudo chown -v -R "$USER:$USER" "$dir"/*
+
+      cd "$dir" || exit 1
+      pullpush
       ;;
     moz)
       ;;
