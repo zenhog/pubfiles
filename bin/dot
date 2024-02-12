@@ -7,6 +7,20 @@ GIT=https://github.com/zenhog
 shopt -s nullglob
 shopt -s extglob
 
+declare -A private=(
+[/etc/security/sudo_authorized_keys]=644
+[/etc/NetworkManager/system-connections]=600
+[/etc/openvpn/PIA/credentials.txt]=600
+[/etc/passwd]=644
+[/etc/group]=644
+[/etc/shadow]=400
+[/etc/gshadow]=400
+[/etc/subuid]=644
+[/etc/subgid]=644
+[/etc/sudoers]=440
+)
+
+
 function install() {
   function rename() {
     local rand
@@ -110,6 +124,12 @@ function install() {
       sudo rsync -v -archive --no-super --no-g --no-t --no-d --no-o --relative \
         --backup-dir=/.backups --exclude=etc/sudoers private/./ /
 
+      for f in "${!private[@]}"; do
+        local mod="${private[$f]}"
+        [[ -d "$f" ]] && sudo chmod "$mod" "$f"/*
+        [[ -f "$f" ]] && sudo chmod "$mod" "$f"
+      done
+
       cat private/etc/sudoers | sudo EDITOR=tee visudo
       ;;
     moz)
@@ -137,18 +157,6 @@ function sync() {
     "--exclude=credentials.txt"
     "--exclude=*~"
     "--exclude=*.new-*"
-  )
-
-  local -A private=(
-    [/etc/security/sudo_authorized_keys]=644
-    [/etc/NetworkManager/system-connections]=600
-    [/etc/openvpn/PIA/credentials.txt]=600
-    [/etc/passwd]=644
-    [/etc/group]=644
-    [/etc/shadow]=400
-    [/etc/gshadow]=400
-    [/etc/subuid]=644
-    [/etc/subgid]=644
   )
 
   local -a files=(
@@ -204,14 +212,16 @@ function sync() {
       pullpush
       ;;
     sys)
+      fixmod "$dir/private"
+
       sudo rsync -v -RrlDpgo --delete --delete-excluded \
         "${blacklist[@]}" "${files[@]}" "$dir/public"
 
       sudo rsync -v -RrlDpgo --delete "${!private[@]}" "$dir/private"
 
-      sudo cat /etc/sudoers > "$dir/private/etc/sudoers"
-
       sudo chown -v -R "$USER:$USER" "$dir"/*
+
+      fixmod "$dir/private"
 
       cd "$dir" || exit 1
       pullpush
