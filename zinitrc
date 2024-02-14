@@ -11,6 +11,9 @@ zinit load 'mafredri/zsh-async'
 zinit ice  lucid depth'1'
 zinit load 'sainnhe/zsh-completions'
 
+zinit ice  lucid depth'1'
+zinit load 'endaaman/lxd-completion-zsh'
+
 zinit ice  depth:'1'
 zinit load 'RobSis/zsh-completion-generator'
 

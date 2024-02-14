@@ -44,7 +44,8 @@ function list() {
 BINDS[alt-t:toggle]=
 function toggle() {
   local hidden
-  read -r hidden < <(tmux show -s -v '@menu-search-hidden')
+  read -r hidden < <(tmux show -s -v '@menu-search-hidden' 2>/dev/null)
+  [[ -z "$hidden" ]] && hidden=0
   [[ "$hidden" -eq 1 ]] && tmux set -s '@menu-search-hidden' 0 ||
     tmux set -s '@menu-search-hidden' 1
 }

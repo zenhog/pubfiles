@@ -20,6 +20,15 @@ declare -A private=(
 [/etc/sudoers]=440
 )
 
+function fixmod() {
+  find "$1" -type f -exec chmod 600 "{}" \;
+  find "$1" -type d -exec chmod 700 "{}" \;
+}
+
+function status() {
+  cd "$HOME/.${1}files" || return
+  git status
+}
 
 function install() {
   function rename() {
@@ -52,11 +61,6 @@ function install() {
       rename "$dir"
       git clone "$url" "$dir" || exit 1
     fi
-  }
-
-  function fixmod() {
-    find "$1" -type f -exec chmod 600 "{}" \;
-    find "$1" -type d -exec chmod 700 "{}" \;
   }
 
   function checkbin() {
@@ -222,6 +226,11 @@ function sync() {
       sudo chown -v -R "$USER:$USER" "$dir"/*
 
       fixmod "$dir/private"
+
+      local -a packages
+      readarray -t packages < \
+        <(sed -rn '/^[^#]+/p' "$dir/public/etc/packages"/* | sort -u)
+      sudo xbps-install -Syu -n "${packages[@]}" || exit 1
 
       cd "$dir" || exit 1
       pullpush
