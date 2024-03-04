@@ -7,6 +7,12 @@ GIT=https://github.com/zenhog
 shopt -s nullglob
 shopt -s extglob
 
+# tag files as targets to symlinks: IFS=_ read -r prefix target <<< dot_zshrc
+#   dot => 644/755
+#   hot => 644/755 but symlink to to .$target
+#   pot => 600/700
+#   rot => 400/700
+
 declare -A private=(
 [/etc/security/sudo_authorized_keys]=644
 [/etc/NetworkManager/system-connections]=600
