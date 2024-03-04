@@ -15,8 +15,6 @@ case "$THEME" in
     ;;
 esac
 
-export LS_COLORS=$(cat "$HOME/.lsc")
-
 export FZF_MARKS_KEEP_ORDER=1
 
 FZF_BASE_FLAGS=(
@@ -66,8 +64,9 @@ export FZF_DEFAULT_OPTS="${FZF_FLAGS[@]}"
 
 [[ -n "$TMUX" ]] && eval $(tmux show-environment -s DISPLAY)
 
+source "$HOME/.config/zsh/ls_colors"
+
 if [[ "$0" =~ zsh ]]; then
   zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
   zstyle ':fzf-tab:*' fzf-flags "${FZF_BASE_FLAGS[@]}"
-  source "$HOME/.fshenv"
 fi

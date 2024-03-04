@@ -41,15 +41,15 @@ setopt nullglob
 
 [[ -f "$HOME/.zinitrc" ]] && source "$HOME/.zinitrc"
 
-for rcfile in $HOME/.zsh.d/*; do
-    [[ -d "$rcfile" ]] || [[ -r "$rcfile" ]] && source $rcfile
+for rcfile in $HOME/.config/zsh/*; do
+    [[ -r "$rcfile" ]] && source "$rcfile"
 done
 
 zstyle ':completion:*' completer _complete _ignored _files
 autoload -U compinit && compinit
 autoload -U edit-command-line
 
-fpath+=("$HOME/.zsh.d/functions")
+fpath+=("$HOME/.config/zsh/functions")
 
 alias ls='ls --color=auto '
 alias ll='ls -l '

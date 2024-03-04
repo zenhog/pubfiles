@@ -1,0 +1,1 @@
+ls_colors/ls_colors.dark
