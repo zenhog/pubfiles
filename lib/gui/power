@@ -43,8 +43,35 @@ function action:selectshot() {
   :
 }
 
-function action:switchtheme() {
-  :
+function action:toggletheme() {
+  local current theme
+
+  read -r current < <(<"$HOME/.colorscheme")
+
+  case "$current" in
+    dark) theme=light;;
+    *) theme=dark;;
+  esac
+
+  cd "$HOME/.config/alacritty" || return 1
+  ln -vf "colors.${theme}.toml" colors.toml
+
+  cd "$HOME/.config/gtk-3.0" || return 1
+  ln -svf "settings.${theme}.ini" settings.ini
+
+  cd "$HOME/.config/tridactyl/themes" || return 1
+  ln -svf "custom-${theme}.css" main.css
+
+  cd "$HOME/.wallpapers" || return 1
+  ln -svf "main.${theme}" main
+  feh --bg-scale "$HOME/.wallpapers/main"
+
+  cd "$HOME/.config/lsd" || return 1
+  ln -svf "themes/${theme}.yaml" colors.yaml
+
+  echo "$theme" > "$HOME/.colorscheme"
+
+  tmux reload
 }
 
 function action:mailsync() {

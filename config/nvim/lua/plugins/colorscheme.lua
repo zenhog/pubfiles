@@ -23,10 +23,13 @@ return {
             theme = 'dark'
           end
 
+          vim.g.theme_current = theme
+
           vim.g.theme_dark = 'tokyonight-night'
           vim.g.theme_light = 'NeoSolarized'
 
-          vim.cmd('colorscheme ' .. vim.g['theme_' .. theme])
+          vim.cmd('colorscheme ' .. vim.g['theme_' .. vim.g.theme_current])
+          vim.opt.bg = theme
         end,
       },
     },

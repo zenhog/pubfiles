@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-shopt -s nullglob
-shopt -s extglob
-
 GITURL=https://github.com/zenhog/dotfiles
 DOTURL=https://raw.githubusercontent.com/zenhog/dotfiles/minimal/bin/dot
+
+BASEDIR="$HOME/.myfiles"
 
 function backup() {
   local rand
@@ -14,43 +13,108 @@ function backup() {
 }
 
 function init() {
-  local branch="$1"
-  local dir="$HOME/.dotfiles/$branch"
+  local branch="${1?}"
 
-  case "$branch" in
-    minimal)
+  clone "$BASEDIR/$branch" "$GITURL" "$branch"
+}
+
+function clone() {
+  local dir="${1?}" url="${2?}" branch="${3?}"
+
+  local cmd=(git clone --branch="$branch" "$url" "$dir")
+
+  cd "$dir" 2>/dev/null || "${cmd[@]}"
+
+  cd "$dir" &&
+    if [[ "$(git remote get-url origin)" != "$url" ||
+       "$(git branch --show-current)" != "$branch" ]]
+    then
+       cd "$HOME"
+       backup "$dir"
+       "${cmd[@]}"
+    fi
+}
+
+function crypt() {
+  local mod="${1?}"
+  local name="${2?}"
+
+  case "$mod" in
+    enc)
+      tar czf - "$name" | gpg -q --pinentry-mode loopback --symmetric --armor \
+        --passphrase-file <(passphrase) --output "$name.tar.gz.gpg"
       ;;
-    public)
+    dec)
+      gpg -q --pinentry-mode loopback --decrypt --output - \
+        --passphrase-file <(passphrase) "$name" | tar xzf -
       ;;
-    private)
-      ;;
-    mozilla)
-      ;;
-    system)
-      ;;
-    secret)
-      ;;
-    gh-pages)
-      ;;
-    *)
-      return 1
+    tmp)
+      local dir="${name%%.private.tar.gz.gpg}.tmp"
+
+      rm -rf "$dir" && mkdir -p "$dir"
+
+      gpg -q --pinentry-mode loopback --decrypt --output - \
+        --passphrase-file <(passphrase) "$name" | tar xzf - -C "$dir"
       ;;
   esac
+}
 
-  if
-    [[ -d "$dir" ]] &&
-    [[ "$(git remote get-url origin)" != "$GITURL" ||
-       "$(git branch --show-current)" != "$branch" ]]
-  then
-      backup "$dir"
-  fi
+function encrypt() {
+  local files
 
-  cd "$dir" || git clone --branch="$branch" "$GITURL" "$dir"
+  readarray -t files < \
+    <(fd -e private --base-directory "$BASEDIR/${1?}" --absolute-path)
+
+  for f in "${files[@]}"; do
+    case "$(cmp "$f")" in
+      1)
+        crypt enc "$f"
+        ;;
+      2)
+        crypt dec "$f"
+        ;;
+    esac
+  done
+}
+
+function decrypt() {
+  cd "$BASEDIR/$1" || return 1
+  local files
+  readarray -t files < <(fd -e secret --absolute-path)
+  for f in "${files[@]}"; do
+    local dir="$(dirname "$f")"
+    local file="$(basename "$f")"
+
+    local name="${file%.*}"
+    local flag="${file##*.}"
+
+    local s="$dir/${name}.private"
+
+    [[ -f "$s" ]] || gpgcrypt dec "$f" > "$s"
+
+    diff -q "$s" <(gpgcrypt dec "$f") || {
+      [[ "$f" -nt "$s" ]] && gpgcrypt dec "$f" > "$s"
+    }
+  done
+}
+
+function diff() {
+  local name="${1?}"
+
+  crypt tmp "$name.tar.gz.gpg"
+
+  diff -rq "$name" "$name/$name"
+  [[ "$f" -nt "$s" ]] && gpgcrypt enc "$f" > "$s"
 }
 
 function resolve() {
-  local name="${1%.*}"
-  local flag="${1##*.}"
+  local dir="$(dirname "$1")"
+  local file="$(basename "$1")"
+
+  local base="${2:-$HOME}"
+
+  local name="${file%.*}"
+  local flag="${file##*.}"
 
   case "$flag" in
     dot)
@@ -59,12 +123,19 @@ function resolve() {
     private)
       resolve "$name"
       ;;
+    readonly)
+      resolve "$name"
+      ;;
     *)
       return 1
       ;;
   esac
 }
 
+# .rootdir
+# .
+# ignore: *.private
+# *.encrypted
 function symlink() {
   local target link prefix="$HOME"
 
@@ -84,13 +155,12 @@ function symlink() {
 function passphrase() {
   declare -g PASSPHRASE
 
-  [[ -n "$PASSPHRASE" ]] && {
-    echo "$PASSPHRASE" && return
-  }
+  if [[ -z "$PASSPHRASE" ]]; then
+    read -r PASSPHRASE < <(pass show tokens/main 2>/dev/null) ||
+      read -r -p 'Passphrase: ' PASSPHRASE
+  fi
 
-  pass show tokens/main 2>/dev/null || {
-    read -r -p 'Passphrase: ' PASSPHRASE && echo "$PASSPHRASE"
-  }
+  echo "$PASSPHRASE"
 }
 
 function checkbin() {
@@ -102,75 +172,12 @@ function checkbin() {
 function install() {
   checkbin git curl gnupg pass rsync
 
-  case "$1" in
-    minimal|public|private|mozilla)
-      ;;
-    system)
-      sudo rm /etc/runit/runsvdir/default/*
-      sudo rsync -v -r --relative --backup-dir=/.backups ./ /
-      ;;
-    secret)
-      cat private/etc/sudoers | sudo EDITOR=tee visudo
-      cat private/etc/passwd  | sudo EDITOR=tee vipw
-      cat private/etc/gpasswd | sudo EDITOR=tee vigr
-      ;;
-  esac
+  local repo="${1?}"
+
+  clone "$repo" && resolve "$repo"
 }
 
 function sync() {
-  local -a blacklist=(
-    "--exclude=supervise"
-    "--exclude=system-connections"
-    "--exclude=credentials.txt"
-    "--exclude=*~"
-    "--exclude=*.new-*"
-  )
-
-
-
-  local -a files=(
-    /usr/local/bin
-    /etc/shells
-    /etc/bluetooth
-    /etc/xbps.d/
-    /etc/acpi/custom.sh
-    /etc/acpi/events/custom
-    /etc/rc.conf
-    /etc/rc.local
-    /etc/svd
-    /root/.fbtermrc
-    /etc/sysctl.conf
-    /etc/rsyslog.conf
-    /etc/modprobe.d
-    /etc/modules-load.d
-    /etc/pam.d/sudo
-    /etc/pam.d/slim
-    /etc/pam.d/login
-    /etc/pam.d/i3lock
-    /etc/X11/xorg.conf
-    /etc/dnscrypt-proxy.toml
-    /etc/forwarding-rules.txt
-    /etc/tor
-    /etc/resolv.conf
-    /etc/resolvconf.conf
-    /etc/openvpn
-    /etc/NetworkManager
-    /etc/slim.conf
-    /usr/share/slim/themes
-    /usr/share/kbd/keymaps/i386/qwerty/us-nocaps.map.gz
-    /etc/cgconfig.conf
-    /etc/zzz.d
-    /etc/udev/rules.d/80-net-name-slot.rules
-    /etc/iproute2/rt_tables
-    /etc/iproute2/rt_tables.d
-    /etc/audit/rules.d
-    /etc/ntpd.conf
-    /etc/rsyslog.conf
-    /etc/default
-    /etc/runit/runsvdir/default/
-    /etc/lxd-config.yaml
-  )
- 
   local dir url
   dir="$HOME/.${1}files"
   url="https://github.com/zenhog/${1}files"

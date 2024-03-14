@@ -1,3 +1,9 @@
+export COLORSCHEME="$HOME/.colorscheme"
+
+if [[ "$USER" == root ]] || [[ -n "$SUDO_USER" ]]; then
+  export COLORSCHEME="/home/$SUDO_USER/.colorscheme"
+fi
+
 if [[ "$USER" == root  &&  -n "$SUDO_USER" ]]; then
   cp "/home/$SUDO_USER/.colorscheme" "$HOME"
 fi
@@ -64,7 +70,7 @@ export FZF_DEFAULT_OPTS="${FZF_FLAGS[@]}"
 
 [[ -n "$TMUX" ]] && eval $(tmux show-environment -s DISPLAY)
 
-source "$HOME/.config/zsh/ls_colors"
+source "$HOME/.config/zsh/ls_colors.zsh"
 
 if [[ "$0" =~ zsh ]]; then
   zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
